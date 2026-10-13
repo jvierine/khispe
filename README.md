@@ -8,6 +8,10 @@ magnetic, collision-dominated ion transport. A primary disturbance and its
 spatial subharmonic seed neighbouring rolls that can pair into larger structures.
 This is an idealized mechanism study, not yet a fit to the measurements.
 
+[![Ri=0.08 electron-density animation](docs/media/ri008-density.png)](docs/media/ri008-density.mp4)
+
+[Watch / download the MP4](https://github.com/jvierine/khispe/raw/refs/heads/main/docs/media/ri008-density.mp4): two simulated hours, following the mean zonal drift. Rendered with Rustplotlib.
+
 For a more extensive model with more realistic large-scale dynamics, turning
 wind shears and plasma electrodynamics, see [Hysell et al. (2024)](https://doi.org/10.1029/2024JA033088).
 Our primary goal here is to replicate the vortex merging.
