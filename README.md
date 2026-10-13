@@ -1,7 +1,5 @@
 # SYISR KHI: Rust/MPI pilot
 
-Separate from Pikos/HEIMDALL and the Starship model. Compute host:
-`j@revontuli.uit.no`, source `/home/j/src/syisr-khi-rust`.
 
 This first executable is a **2D x-z stratified Boussinesq shear-layer benchmark**,
 not a replication of Wang's event or Hysell's 3D model. MPI divides
