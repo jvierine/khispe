@@ -51,7 +51,7 @@ fn main() -> Result<()> {
     )?);
     f.labels.push(Label::new("Electron density", 56., 4.));
     f.labels.push(Label::new("Neutral vorticity", 142., 4.));
-    for (row, key) in ["6", "120", "240", "480"].iter().enumerate() {
+    for (row, key) in ["120", "240", "360", "480"].iter().enumerate() {
         let g = h.group(key)?;
         let t = g.attr("time_s")?.read_scalar::<f64>()?;
         for (col, name, sc) in [(0, "density", ne), (1, "vorticity", vort)] {
@@ -82,10 +82,8 @@ fn main() -> Result<()> {
             )?;
             field.interpolate = true;
             p.push(Layer::Pcolormesh(field));
-            if row == 0 {
-                // Initial layer: no vortices exist yet, so no merger arrows.
-            } else if row < 3 {
-                let targets = if row == 1 {
+            if row < 2 {
+                let targets = if row == 0 {
                     [-36.79, -15.96]
                 } else {
                     [-35.78, -16.63]
@@ -106,7 +104,7 @@ fn main() -> Result<()> {
                 arrow(
                     &mut p,
                     [-39., 2.2],
-                    [-29.73, 0.],
+                    [if row == 2 { -28.05 } else { -29.73 }, 0.],
                     if col == 0 { "#ffffff" } else { "#151515" },
                 );
             }
