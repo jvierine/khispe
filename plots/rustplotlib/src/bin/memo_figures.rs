@@ -2,31 +2,43 @@ use anyhow::Result;
 use rustplotlib::*;
 use std::f64::consts::PI;
 fn arrow(p: &mut Panel, a: [f64; 2], b: [f64; 2], color: &str) {
-    let mut l = Line::new(vec![a, b], color);
-    l.width_pt = 1.;
-    p.push(Layer::Line(l));
     let dx = b[0] - a[0];
     let dz = b[1] - a[1];
     let n = (dx * dx + dz * dz * 100.).sqrt();
     let ux = dx / n;
     let uz = dz / n;
+    let mut segments = vec![vec![a, b]];
     for sign in [-1., 1.] {
-        let end = [
-            b[0] - 2. * ux + sign * 0.8 * uz * 10.,
-            b[1] - 2. * uz - sign * 0.08 * ux,
-        ];
-        let mut l = Line::new(vec![b, end], color);
-        l.width_pt = 1.;
-        p.push(Layer::Line(l));
+        segments.push(vec![
+            b,
+            [
+                b[0] - 2. * ux + sign * 0.8 * uz * 10.,
+                b[1] - 2. * uz - sign * 0.08 * ux,
+            ],
+        ]);
+    }
+    if color == "#ffffff" {
+        for segment in &segments {
+            let mut line = Line::new(segment.clone(), "#111111");
+            line.width_pt = 2.2;
+            p.push(Layer::Line(line));
+        }
+    }
+    for segment in segments {
+        let mut line = Line::new(segment, color);
+        line.width_pt = 1.;
+        p.push(Layer::Line(line));
     }
 }
 fn main() -> Result<()> {
-    let h = hdf5::File::open("data/ri008-memo/plot_data.h5")?;
-    let out = "../syisr-khi-memo-overleaf/figures";
+    let h = hdf5::File::open("fixtures/ri008_memo.h5")?;
+    let out = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "../syisr-simulation-memos-overleaf/figures".into());
     let x = h.dataset("x_edges_km")?.read_raw::<f64>()?;
     let z = h.dataset("z_edges_km")?.read_raw::<f64>()?;
     let mut f = Figure::new(IntendedUse::ArticleWide);
-    f.height_mm = 181.;
+    f.height_mm = 210.;
     let ne = f.scale(Scale::new(
         [1e10, 2e12],
         Normalization::Log,
@@ -39,16 +51,16 @@ fn main() -> Result<()> {
     )?);
     f.labels.push(Label::new("Electron density", 56., 4.));
     f.labels.push(Label::new("Neutral vorticity", 142., 4.));
-    for (row, key) in ["120", "240", "480"].iter().enumerate() {
+    for (row, key) in ["6", "120", "240", "480"].iter().enumerate() {
         let g = h.group(key)?;
         let t = g.attr("time_s")?.read_scalar::<f64>()?;
         for (col, name, sc) in [(0, "density", ne), (1, "vorticity", vort)] {
             let xx = 19. + col as f64 * 86.;
-            let yy = 12. + row as f64 * 49.;
+            let yy = 12. + row as f64 * 45.;
             let mut ax = Axes::new(
                 [-45., 5.],
                 [-3., 3.],
-                if row == 2 {
+                if row == 3 {
                     r"$x-U_ct\,[\mathrm{km}]$"
                 } else {
                     ""
@@ -70,8 +82,10 @@ fn main() -> Result<()> {
             )?;
             field.interpolate = true;
             p.push(Layer::Pcolormesh(field));
-            if row < 2 {
-                let targets = if row == 0 {
+            if row == 0 {
+                // Initial layer: no vortices exist yet, so no merger arrows.
+            } else if row < 3 {
+                let targets = if row == 1 {
                     [-36.79, -15.96]
                 } else {
                     [-35.78, -16.63]
@@ -97,7 +111,11 @@ fn main() -> Result<()> {
                 );
             }
             f.labels.push(Label::new(
-                format!("$t={:.0}\\,\\mathrm{{min}}$", t / 60.),
+                if t == 60. {
+                    r"$t=60\,\mathrm{s}$".into()
+                } else {
+                    format!("$t={:.0}\\,\\mathrm{{min}}$", t / 60.)
+                },
                 xx + 35.,
                 yy - 4.,
             ));
@@ -113,7 +131,7 @@ fn main() -> Result<()> {
             vec![-0.08, 0., 0.08],
         ),
     ] {
-        let mut bar = Colorbar::new(Rect::new(xx, 160., 70., 2.), sc, label, ticks);
+        let mut bar = Colorbar::new(Rect::new(xx, 193., 70., 2.), sc, label, ticks);
         bar.horizontal = true;
         f.colorbars.push(bar);
     }
