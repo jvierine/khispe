@@ -4,7 +4,7 @@ Separate from Pikos/HEIMDALL and the Starship model. Compute host:
 `j@revontuli.uit.no`, source `/home/j/src/syisr-khi-rust`.
 
 This first executable is a **2D x-z stratified Boussinesq shear-layer benchmark**,
-not a replication of Wang's event or Hysell's 3D extended-MHD model. MPI divides
+not a replication of Wang's event or Hysell's 3D model. MPI divides
 the east-west dimension into equal slabs; finite-difference and flux operators
 exchange halos. A distributed conjugate-gradient pressure/streamfunction solve
 uses collective residual reductions. Only snapshots are gathered to rank zero
