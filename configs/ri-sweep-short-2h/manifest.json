@@ -1,0 +1,66 @@
+{
+  "cases": [
+    {
+      "name": "ri008",
+      "Ri": 0.08,
+      "wind_m_s": -74.95331880577403,
+      "config": "configs/ri-sweep-short-2h/ri008.json",
+      "expected_frames": 721
+    },
+    {
+      "name": "ri010",
+      "Ri": 0.1,
+      "wind_m_s": -67.04028639556964,
+      "config": "configs/ri-sweep-short-2h/ri010.json",
+      "expected_frames": 721
+    },
+    {
+      "name": "ri012",
+      "Ri": 0.12,
+      "wind_m_s": -61.19912853410034,
+      "config": "configs/ri-sweep-short-2h/ri012.json",
+      "expected_frames": 721
+    },
+    {
+      "name": "ri014",
+      "Ri": 0.14,
+      "wind_m_s": -56.65938328543397,
+      "config": "configs/ri-sweep-short-2h/ri014.json",
+      "expected_frames": 721
+    },
+    {
+      "name": "ri016",
+      "Ri": 0.16,
+      "wind_m_s": -53.0,
+      "config": "configs/ri-sweep-short-2h/ri016.json",
+      "expected_frames": 721
+    },
+    {
+      "name": "ri018",
+      "Ri": 0.18,
+      "wind_m_s": -49.968879203849355,
+      "config": "configs/ri-sweep-short-2h/ri018.json",
+      "expected_frames": 721
+    }
+  ],
+  "mpi_ranks": 128,
+  "simulated_seconds_per_case": 7200,
+  "output_cadence_s": 10,
+  "grid": [
+    512,
+    192
+  ],
+  "varied_parameter": "signed shear amplitude; N2 and shear width held fixed",
+  "prescribed_descent_m_s": -1.3888888888888888,
+  "layer_center_start_m": 118000,
+  "layer_center_end_m": 108000,
+  "ion_model": "Fe-like collisional E/B drift; prescribed E; no chemistry; no self-consistent polarization",
+  "resolution_caveat": "Equilibrium ion sheet thinner than vertical grid; this sweep is a morphology pilot, not a converged ion-density fit",
+  "primary_wavelength_m": 21500,
+  "pairing_wavelength_m": 43000,
+  "domain_length_m": 172000,
+  "domain_reason": "Eight primary wavelengths and four pairing wavelengths; exact periodic compatibility",
+  "previous_sweep": "output/ri-sweep-2h-20261013",
+  "retained_descent": "118 to 108 km over two hours; magnetic drift zero crossing moves with prescribed shear frame",
+  "execution_note": "Ri=0.08 queued after the already running 0.10--0.18 batch; all runs use 128 ranks sequentially"
+}

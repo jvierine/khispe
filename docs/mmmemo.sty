@@ -1,0 +1,102 @@
+%% mmmemo.sty -- compact technical-memorandum style
+%% Inspired by the direct, utilitarian structure of the MIT Haystack
+%% Observatory EDGES memo series. No MIT or Haystack branding is reproduced.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{mmmemo}[2026/09/10 v1.1 Micrometeorite modeling memo style]
+
+\RequirePackage[letterpaper,top=0.58in,bottom=0.62in,left=0.72in,right=0.72in]{geometry}
+\RequirePackage[T1]{fontenc}
+\RequirePackage{newtxtext}
+\RequirePackage{newtxmath}
+\RequirePackage{microtype}
+\RequirePackage{graphicx}
+\RequirePackage{booktabs}
+\RequirePackage{siunitx}
+\RequirePackage{amsmath}
+\RequirePackage{enumitem}
+\RequirePackage{needspace}
+\RequirePackage{caption}
+\RequirePackage{fancyhdr}
+\RequirePackage[hidelinks]{hyperref}
+\RequirePackage{xcolor}
+
+\definecolor{mmrule}{gray}{0.25}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.48em plus 0.12em minus 0.08em}
+\setlist{nosep,leftmargin=1.35em}
+\setlength{\textfloatsep}{10pt plus 2pt minus 2pt}
+\setlength{\floatsep}{9pt plus 2pt minus 2pt}
+\captionsetup{font=small,labelfont=bf,skip=4pt}
+\sisetup{detect-all,per-mode=symbol,range-phrase=--}
+
+\newif\ifscriptprovenance
+\scriptprovenancetrue
+\newcommand{\showscriptprovenance}{\scriptprovenancetrue}
+\newcommand{\hidescriptprovenance}{\scriptprovenancefalse}
+\newcommand{\scriptprovenance}[1]{%
+  \ifscriptprovenance\par\vspace{1pt}{\footnotesize\itshape Script: \texttt{#1}.}\fi}
+
+\newcommand{\mmseries}{MICROMETEORITE MODELING MEMO SERIES}
+\newcommand{\mminstitution}{UIT THE ARCTIC UNIVERSITY OF NORWAY}
+\newcommand{\mmlocation}{TROMS\O, NORWAY}
+\newcommand{\mmmemonumber}{}
+\newcommand{\mmdate}{}
+\newcommand{\mmto}{}
+\newcommand{\mmfrom}{}
+\newcommand{\mmsubject}{}
+\newcommand{\mmlogofile}{assets/uit-circular-logo.pdf}
+\newcommand{\setmmlogo}[1]{\renewcommand{\mmlogofile}{#1}}
+
+\newcommand{\mmmemo}[5]{%
+  \renewcommand{\mmmemonumber}{#1}%
+  \renewcommand{\mmdate}{#2}%
+  \renewcommand{\mmto}{#3}%
+  \renewcommand{\mmfrom}{#4}%
+  \renewcommand{\mmsubject}{#5}%
+}
+
+\newcommand{\makemmmemo}{%
+  \thispagestyle{fancy}%
+  \begin{minipage}[t]{0.62\textwidth}
+    \begin{minipage}[c]{0.16\textwidth}
+      \IfFileExists{\mmlogofile}{\includegraphics[width=0.62in]{\mmlogofile}}{}
+    \end{minipage}\hspace{0.02\textwidth}%
+    \begin{minipage}[c]{0.80\textwidth}
+      \raggedright\bfseries
+      \mminstitution\\[-1pt]
+      \mmseries\\[-1pt]
+      \mmlocation
+    \end{minipage}
+  \end{minipage}%
+  \hfill
+  \begin{minipage}[t]{0.34\textwidth}
+    \raggedleft\bfseries MM MEMO \#\mmmemonumber\\[2pt]
+    \normalfont\mmdate
+  \end{minipage}
+  \par\vspace{0.42em}\hrule height 0.7pt\vspace{0.48em}
+  \begin{tabular}{@{}p{0.72in}p{\dimexpr\textwidth-0.72in-2\tabcolsep\relax}@{}}
+    \textbf{To:} & \mmto\\
+    \textbf{From:} & \mmfrom\\
+    \textbf{Subject:} & \textbf{\mmsubject}
+  \end{tabular}
+  \par\vspace{0.35em}\hrule height 0.35pt\vspace{0.5em}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\footnotesize MM MEMO \#\mmmemonumber}
+\fancyhead[R]{\footnotesize\mmsubject}
+\fancyfoot[C]{\footnotesize\thepage}
+\renewcommand{\headrulewidth}{0.35pt}
+\renewcommand{\footrulewidth}{0pt}
+\setlength{\headheight}{13.5pt}
+
+\newcommand{\mmsection}[1]{%
+  \Needspace{4\baselineskip}\par\vspace{0.45em}{\bfseries #1}\par\vspace{-0.12em}%
+}
+
+\newenvironment{mmconclusion}
+  {\par\medskip\hrule\smallskip\textbf{Conclusion.}\ }
+  {\par\smallskip\hrule\medskip}
+
+\endinput

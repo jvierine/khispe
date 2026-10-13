@@ -1,0 +1,8 @@
+#!/bin/sh
+# Matching Ubuntu MPICH development headers extracted without system changes.
+root="$HOME/.local/opt/mpich-dev/usr/lib/x86_64-linux-gnu"
+if [ "$1" = "-show" ]; then
+  echo "gcc -I$root/mpich/include -L$root -lmpich"
+else
+  exec gcc -I"$root/mpich/include" -L"$root" "$@" -lmpich
+fi

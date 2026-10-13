@@ -1,0 +1,14 @@
+/target/
+/output/
+__pycache__/
+
+/node_modules/
+/data/
+/plots/rustplotlib/target/
+/.latex-cache/
+*.mp4
+*.gif
+*.h5
+*.hdf5
+*.bin
+.DS_Store
