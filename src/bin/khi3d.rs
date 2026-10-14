@@ -8,10 +8,10 @@
 //! of two Clebsch pairs.  They are diagnostics, not yet a vortex-particle
 //! integrator.
 
-use anyhow::{Result, bail, ensure};
+use anyhow::{bail, ensure, Result};
 use mpi::{collective::SystemOperation, topology::SimpleCommunicator, traits::*};
 use serde::{Deserialize, Serialize};
-use std::{f64::consts::PI, path::Path};
+use std::{f64::consts::PI, path::Path, time::Instant};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -194,7 +194,8 @@ impl Grid<'_> {
                 self.mean0(&mut x);
                 return Ok(x);
             }
-            let ap: Vec<_> = self.lap(&p).into_iter().map(|q| -q).collect();
+            let (gx, gy, gz) = self.pressure_gradient(&p);
+            let ap: Vec<_> = self.div(&gx, &gy, &gz).into_iter().map(|q| -q).collect();
             let pap = self.dot(&p, &ap);
             ensure!(pap > 0., "3-D pressure CG lost definiteness");
             let a = rr / pap;
@@ -221,17 +222,41 @@ impl Grid<'_> {
                 for z in 0..self.nz {
                     let k = self.k(i, j, z);
                     let jm = (j + self.ny - 1) % self.ny;
-                    let jp = (j + 1) % self.ny;
-                    let wd = if z == 0 { 0. } else { w[k - 1] };
                     let wu = if z + 1 == self.nz { 0. } else { w[k + 1] };
-                    d[k] = (uh[(i + 2) * slab + j * self.nz + z] - uh[i * slab + j * self.nz + z])
-                        / (2. * self.dx)
-                        + (v[self.k(i, jp, z)] - v[self.k(i, jm, z)]) / (2. * self.dy)
-                        + (wu - wd) / (2. * self.dz);
+                    // Face-to-cell divergence. Horizontal boundaries are
+                    // periodic; w[0] is the lower wall face and the upper wall
+                    // face outside the array is identically zero.
+                    d[k] = (u[k] - uh[i * slab + j * self.nz + z]) / self.dx
+                        + (v[k] - v[self.k(i, jm, z)]) / self.dy
+                        + (wu - w[k]) / self.dz;
                 }
             }
         }
         d
+    }
+    // G = -D^T for the face-to-cell divergence above. Thus -DG is the
+    // nearest-neighbour Neumann Laplacian: there are no checkerboard pressure
+    // null modes and the projection uses one compatible operator pair.
+    fn pressure_gradient(&self, p: &[f64]) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
+        let ph = self.halo(p);
+        let slab = self.ny * self.nz;
+        let mut gx = vec![0.; self.len()];
+        let mut gy = gx.clone();
+        let mut gz = gx.clone();
+        for i in 0..self.nx {
+            for j in 0..self.ny {
+                for z in 0..self.nz {
+                    let k = self.k(i, j, z);
+                    let jp = self.k(i, (j + 1) % self.ny, z);
+                    gx[k] = (ph[(i + 2) * slab + j * self.nz + z] - p[k]) / self.dx;
+                    gy[k] = (p[jp] - p[k]) / self.dy;
+                    if z > 0 {
+                        gz[k] = (p[k] - p[k - 1]) / self.dz;
+                    }
+                }
+            }
+        }
+        (gx, gy, gz)
     }
     fn project(
         &self,
@@ -241,28 +266,19 @@ impl Grid<'_> {
         dt: f64,
         tol: f64,
     ) -> Result<()> {
-        let rhs: Vec<_> = self.div(u, v, w).into_iter().map(|q| -q / dt).collect();
-        let p = self.poisson_neumann(&rhs, tol)?;
-        let ph = self.halo(&p);
-        let slab = self.ny * self.nz;
+        // The lower wall face is explicit; the upper wall face is implicit.
         for i in 0..self.nx {
             for j in 0..self.ny {
-                for z in 0..self.nz {
-                    let k = self.k(i, j, z);
-                    let jm = (j + self.ny - 1) % self.ny;
-                    let jp = (j + 1) % self.ny;
-                    let pd = if z == 0 { p[k] } else { p[k - 1] };
-                    let pu = if z + 1 == self.nz { p[k] } else { p[k + 1] };
-                    u[k] -= dt
-                        * (ph[(i + 2) * slab + j * self.nz + z] - ph[i * slab + j * self.nz + z])
-                        / (2. * self.dx);
-                    v[k] -= dt * (p[self.k(i, jp, z)] - p[self.k(i, jm, z)]) / (2. * self.dy);
-                    w[k] -= dt * (pu - pd) / (2. * self.dz);
-                    if z == 0 || z + 1 == self.nz {
-                        w[k] = 0.;
-                    }
-                }
+                w[self.k(i, j, 0)] = 0.;
             }
+        }
+        let rhs: Vec<_> = self.div(u, v, w).into_iter().map(|q| -q / dt).collect();
+        let p = self.poisson_neumann(&rhs, tol)?;
+        let (gx, gy, gz) = self.pressure_gradient(&p);
+        for k in 0..self.len() {
+            u[k] -= dt * gx[k];
+            v[k] -= dt * gy[k];
+            w[k] -= dt * gz[k];
         }
         Ok(())
     }
@@ -532,7 +548,7 @@ fn write_frame(g: &Grid, s: &State, c: &Config, path: &Path, t: f64) -> Result<(
             .map(|j| (j as f64 + 0.5) * g.dy - c.ly_m / 2.)
             .collect();
         let z: Vec<_> = (0..c.nz)
-            .map(|k| c.altitude_m + (k as f64 + 0.5) * g.dz - c.lz_m / 2.)
+            .map(|k| c.altitude_m + c.layer_descent_m_s * t + (k as f64 + 0.5) * g.dz - c.lz_m / 2.)
             .collect();
         f.new_dataset_builder().with_data(&x).create("x_m")?;
         f.new_dataset_builder().with_data(&y).create("y_m")?;
@@ -548,6 +564,7 @@ fn write_frame(g: &Grid, s: &State, c: &Config, path: &Path, t: f64) -> Result<(
     Ok(())
 }
 fn run(world: &SimpleCommunicator) -> Result<()> {
+    let wall_started = Instant::now();
     let args: Vec<_> = std::env::args().collect();
     let c: Config = if args.len() > 1 {
         serde_json::from_slice(&std::fs::read(&args[1])?)?
@@ -651,6 +668,16 @@ fn run(world: &SimpleCommunicator) -> Result<()> {
     while t < c.end_s + 1e-9 {
         if t >= next - 1e-9 {
             write_frame(&g, &s, &c, &dir.join(format!("frame_{frame:05}.h5")), t)?;
+            let divergence = g.div(&s.u, &s.v, &s.w);
+            let divergence_l2 = g.dot(&divergence, &divergence).sqrt();
+            let mass = g.sum(s.n.iter().sum());
+            if world.rank() == 0 {
+                println!(
+                    "frame {frame:05}: t={t:.1} s, wall={:.1} s, ||div u||_2={divergence_l2:.3e}, ion mass drift={:.3e}",
+                    wall_started.elapsed().as_secs_f64(),
+                    mass / mass0 - 1.
+                );
+            }
             frame += 1;
             next += c.output_s;
         }
@@ -703,7 +730,7 @@ fn run(world: &SimpleCommunicator) -> Result<()> {
         std::fs::write(
             dir.join("diagnostics.json"),
             serde_json::to_string_pretty(
-                &serde_json::json!({"time_s":t,"frames":frame,"max_divergence_s-1":divmax,"mass_relative_error":mass_error,"status":"3-D pilot, not an observational fit"}),
+                &serde_json::json!({"time_s":t,"frames":frame,"wall_seconds":wall_started.elapsed().as_secs_f64(),"max_divergence_s-1":divmax,"mass_relative_error":mass_error,"status":"3-D pilot, not an observational fit"}),
             )?,
         )?;
         println!("done t={t:0.1}s max|div u|={divmax:0.3e}");
@@ -722,6 +749,49 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn projection_removes_discrete_divergence() {
+        let universe = mpi::initialize().expect("MPI initialize");
+        let world = universe.world();
+        let g = Grid {
+            world: &world,
+            nx: 16,
+            ny: 4,
+            nz: 12,
+            start: 0,
+            dx: 2.,
+            dy: 3.,
+            dz: 1.,
+        };
+        let mut u = vec![0.; g.len()];
+        let mut v = u.clone();
+        let mut w = u.clone();
+        for i in 0..g.nx {
+            for j in 0..g.ny {
+                for z in 0..g.nz {
+                    let k = g.k(i, j, z);
+                    u[k] = (2. * PI * i as f64 / 4.).sin() * (1. + z as f64 / 12.);
+                    v[k] = (2. * PI * j as f64 / 4.).cos();
+                    if z > 0 && z + 1 < g.nz {
+                        w[k] = (z as f64).sin();
+                    }
+                }
+            }
+        }
+        let before = g.dot(&g.div(&u, &v, &w), &g.div(&u, &v, &w)).sqrt();
+        g.project(&mut u, &mut v, &mut w, 0.1, 1e-10).unwrap();
+        let after = g.dot(&g.div(&u, &v, &w), &g.div(&u, &v, &w)).sqrt();
+        assert!(
+            after / before < 1e-8,
+            "residual fraction {}",
+            after / before
+        );
+        for i in 0..g.nx {
+            for j in 0..g.ny {
+                assert_eq!(w[g.k(i, j, 0)], 0.);
+            }
+        }
+    }
     #[test]
     fn magnetic_reference_flow() {
         let mut c = Config::default();
