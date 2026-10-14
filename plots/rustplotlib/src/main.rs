@@ -22,6 +22,7 @@ fn main() -> Result<()> {
     let out = PathBuf::from(&args[2]);
     fs::create_dir_all(out.join("ne"))?;
     fs::create_dir_all(out.join("ion_up"))?;
+    fs::create_dir_all(out.join("vorticity"))?;
     let mut keys = h.member_names()?;
     keys.sort();
     let g = h.group(&keys[0])?;
@@ -43,15 +44,20 @@ fn main() -> Result<()> {
         .map(|j| rel[0] + (j as f64 - 0.5) * dz / 1000.)
         .collect();
     let mut peak: f64 = 0.;
+    let mut vort_peak: f64 = 0.;
     for key in &keys {
         let g = h.group(key)?;
         let u = g.dataset("u_m_s")?.read_raw::<f32>()?;
         let w = g.dataset("w_m_s")?.read_raw::<f32>()?;
+        let omega = curl(&u, &w, nx, nz, dx, dz);
+        vort_peak = omega.iter().fold(vort_peak, |m, v| m.max(v.abs()));
         for (i, &uu) in u.iter().enumerate() {
             peak = peak.max(ion_up(uu as f64, w[i] as f64, &c).abs());
         }
     }
     let limit = (peak / 5.).ceil().max(1.) * 5.;
+    let vort_limit = (vort_peak / 0.01).ceil().max(1.) * 0.01;
+    println!("Vorticity fixed limits +/- {vort_limit} s^-1");
     println!("Ion vertical-drift fixed limits +/- {limit} m/s; max {peak}");
     let mut tex = Latex::default();
     tex.font_pt = 10.;
@@ -71,8 +77,10 @@ fn main() -> Result<()> {
         let q = g.dataset("log10_ne_quantized")?.read_raw::<u16>()?;
         let u = g.dataset("u_m_s")?.read_raw::<f32>()?;
         let w = g.dataset("w_m_s")?.read_raw::<f32>()?;
+        let omega = curl(&u, &w, nx, nz, dx, dz);
         let mut density = vec![0.; nx * nz];
         let mut vz = density.clone();
+        let mut vort = density.clone();
         let shift = num(&c, "advection_m_s") * t / dx;
         for j in 0..nz {
             for i in 0..nx {
@@ -81,13 +89,17 @@ fn main() -> Result<()> {
                 let f = p - p.floor();
                 let aa = a.rem_euclid(nx as i64) as usize * nz + j;
                 let bb = (a + 1).rem_euclid(nx as i64) as usize * nz + j;
+                vort[j * nx + i] = (1. - f) * omega[aa] + f * omega[bb];
                 density[j * nx + i] =
                     10f64.powf(((1. - f) * q[aa] as f64 + f * q[bb] as f64) / 4096.);
                 vz[j * nx + i] = (1. - f) * ion_up(u[aa] as f64, w[aa] as f64, &c)
                     + f * ion_up(u[bb] as f64, w[bb] as f64, &c);
             }
         }
-        for (mode, values) in [("ne", density), ("ion_up", vz)] {
+        for (mode, values) in [("ne", density), ("ion_up", vz), ("vorticity", vort)] {
+            if args.get(3).is_some_and(|selected| selected != mode) {
+                continue;
+            }
             let mut fig = Figure::new(IntendedUse::ArticleWide);
             fig.height_mm = 105.;
             fig.raster_dpi = 180.;
@@ -102,6 +114,17 @@ fn main() -> Result<()> {
                     )?),
                     r"$n_e\,[\mathrm{m}^{-3}]$",
                     vec![1e10, 1e11, 2e12],
+                )
+            } else if mode == "vorticity" {
+                (
+                    151.,
+                    fig.scale(Scale::new(
+                        [-vort_limit, vort_limit],
+                        Normalization::Linear,
+                        ColorMap::diverging(),
+                    )?),
+                    r"$\Omega\,[\mathrm{s}^{-1}]$",
+                    vec![-vort_limit, 0., vort_limit],
                 )
             } else {
                 (
@@ -175,8 +198,23 @@ fn main() -> Result<()> {
     fs::write(
         out.join("provenance.json"),
         serde_json::to_vec_pretty(
-            &serde_json::json!({"renderer":"rustplotlib","script":"plots/rustplotlib/src/main.rs","source_hdf5":args[1],"frames":keys.len(),"ion_velocity":"collisional Lorentz-neutral-drag solution, model frame, positive upward; no artificial phase-descent velocity added","ion_velocity_limits_m_s":[-limit,limit],"camera":"mean zonal drift comoving","mask":false,"config":c}),
+            &serde_json::json!({"renderer":"rustplotlib","script":"plots/rustplotlib/src/main.rs","source_hdf5":args[1],"frames":keys.len(),"ion_velocity":"collisional Lorentz-neutral-drag solution, model frame, positive upward; no artificial phase-descent velocity added","ion_velocity_limits_m_s":[-limit,limit],"vorticity":"d_x w - d_z u; centered finite differences of saved float32 velocities, periodic x, one-sided vertical endpoints","vorticity_limits_s-1":[-vort_limit,vort_limit],"camera":"mean zonal drift comoving","mask":false,"config":c}),
         )?,
     )?;
     Ok(())
+}
+
+fn curl(u: &[f32], w: &[f32], nx: usize, nz: usize, dx: f64, dz: f64) -> Vec<f64> {
+    let mut out = vec![0.; nx * nz];
+    for i in 0..nx {
+        for j in 0..nz {
+            let im = (i + nx - 1) % nx;
+            let ip = (i + 1) % nx;
+            let jm = j.saturating_sub(1);
+            let jp = (j + 1).min(nz - 1);
+            out[i * nz + j] = (w[ip * nz + j] as f64 - w[im * nz + j] as f64) / (2. * dx)
+                - (u[i * nz + jp] as f64 - u[i * nz + jm] as f64) / ((jp - jm) as f64 * dz);
+        }
+    }
+    out
 }
