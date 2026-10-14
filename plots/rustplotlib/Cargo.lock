@@ -762,7 +762,7 @@ checksum = "6b1e7f9a428571be2dc5bc0505c13fb6bf936822b894ec87abf8a08a4e51742d"
 [[package]]
 name = "rustplotlib"
 version = "0.1.0"
-source = "git+https://github.com/jvierine/rustplotlib?rev=5a805e31021c045c350754903596bd34fbe1c764#5a805e31021c045c350754903596bd34fbe1c764"
+source = "git+https://github.com/jvierine/rustplotlib?rev=120e788ae5256ccd0b1a297eccee5ca2193057fb#120e788ae5256ccd0b1a297eccee5ca2193057fb"
 dependencies = [
  "anyhow",
  "base64",
